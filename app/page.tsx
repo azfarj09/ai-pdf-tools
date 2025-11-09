@@ -3,14 +3,24 @@
 import type React from "react"
 
 import { useState } from "react"
-import { FileText, Sparkles, Upload } from "lucide-react"
+import { FileText, Sparkles, Upload, Brain, ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+
+interface Flashcard {
+  question: string
+  answer: string
+}
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null)
   const [summary, setSummary] = useState<string>("")
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([])
+  const [currentCardIndex, setCurrentCardIndex] = useState(0)
+  const [showAnswer, setShowAnswer] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingFlashcards, setLoadingFlashcards] = useState(false)
   const [error, setError] = useState<string>("")
   const [dragActive, setDragActive] = useState(false)
 
@@ -52,7 +62,7 @@ export default function Home() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSummarize = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!file) {
       setError("Please select a PDF file")
@@ -78,7 +88,6 @@ export default function Home() {
       }
 
       const data = await response.json()
-      console.log("API Response:", data)
       if (data.summary) {
         setSummary(data.summary)
       } else {
@@ -91,10 +100,66 @@ export default function Home() {
     }
   }
 
+  const handleGenerateFlashcards = async () => {
+    if (!file) {
+      setError("Please select a PDF file")
+      return
+    }
+
+    setLoadingFlashcards(true)
+    setError("")
+    setFlashcards([])
+    setCurrentCardIndex(0)
+    setShowAnswer(false)
+
+    try {
+      const formData = new FormData()
+      formData.append("pdf", file)
+
+      const response = await fetch("/api/flashcards", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to generate flashcards")
+      }
+
+      const data = await response.json()
+      if (data.flashcards && data.flashcards.length > 0) {
+        setFlashcards(data.flashcards)
+      } else {
+        setError("No flashcards received from API")
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "An error occurred")
+    } finally {
+      setLoadingFlashcards(false)
+    }
+  }
+
   const handleReset = () => {
     setFile(null)
     setSummary("")
+    setFlashcards([])
+    setCurrentCardIndex(0)
+    setShowAnswer(false)
     setError("")
+  }
+
+  const nextCard = () => {
+    if (currentCardIndex < flashcards.length - 1) {
+      setCurrentCardIndex(currentCardIndex + 1)
+      setShowAnswer(false)
+    }
+  }
+
+  const prevCard = () => {
+    if (currentCardIndex > 0) {
+      setCurrentCardIndex(currentCardIndex - 1)
+      setShowAnswer(false)
+    }
   }
 
   return (
@@ -102,10 +167,10 @@ export default function Home() {
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="flex items-center gap-3">
           <Sparkles className="w-10 h-10 text-primary" />
-          <h1 className="text-4xl font-bold tracking-tight text-balance md:text-5xl">PDF Summarizer</h1>
+          <h1 className="text-4xl font-bold tracking-tight text-balance md:text-5xl">AI PDF Tools</h1>
         </div>
         <p className="max-w-xl text-lg text-muted-foreground text-balance">
-          Upload any PDF document and receive a clean, AI-powered summary in seconds
+          Upload any PDF document to generate summaries or study flashcards
         </p>
       </div>
 
@@ -115,7 +180,7 @@ export default function Home() {
           <CardDescription>Select or drag and drop your PDF file to get started</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSummarize} className="space-y-6">
             <div
               className={`relative flex flex-col items-center justify-center gap-4 p-8 border-2 border-dashed rounded-lg transition-colors ${
                 dragActive ? "border-primary bg-accent/20" : "border-border hover:border-primary/50"
@@ -154,8 +219,27 @@ export default function Home() {
                   </>
                 )}
               </Button>
-              {(file || summary) && (
-                <Button type="button" variant="outline" onClick={handleReset} disabled={loading}>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={!file || loadingFlashcards}
+                onClick={handleGenerateFlashcards}
+                className="flex-1"
+              >
+                {loadingFlashcards ? (
+                  <>
+                    <Brain className="w-4 h-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Brain className="w-4 h-4 mr-2" />
+                    Generate Flashcards
+                  </>
+                )}
+              </Button>
+              {(file || summary || flashcards.length > 0) && (
+                <Button type="button" variant="outline" onClick={handleReset} disabled={loading || loadingFlashcards}>
                   Reset
                 </Button>
               )}
@@ -183,6 +267,50 @@ export default function Home() {
                     </p>
                   ),
               )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {flashcards.length > 0 && (
+        <Card className="w-full max-w-2xl">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="w-5 h-5" />
+              Flashcards
+            </CardTitle>
+            <CardDescription>
+              Card {currentCardIndex + 1} of {flashcards.length}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div
+              className="min-h-[200px] p-6 rounded-lg bg-muted/50 flex items-center justify-center cursor-pointer transition-all hover:bg-muted"
+              onClick={() => setShowAnswer(!showAnswer)}
+            >
+              <div className="text-center space-y-4">
+                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+                  {showAnswer ? "Answer" : "Question"}
+                </p>
+                <p className="text-lg leading-relaxed">
+                  {showAnswer ? flashcards[currentCardIndex].answer : flashcards[currentCardIndex].question}
+                </p>
+                <p className="text-xs text-muted-foreground">Click to {showAnswer ? "hide" : "reveal"} answer</p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <Button variant="outline" onClick={prevCard} disabled={currentCardIndex === 0}>
+                <ChevronLeft className="w-4 h-4 mr-2" />
+                Previous
+              </Button>
+              <Button onClick={() => setShowAnswer(!showAnswer)} variant="secondary">
+                {showAnswer ? "Show Question" : "Show Answer"}
+              </Button>
+              <Button variant="outline" onClick={nextCard} disabled={currentCardIndex === flashcards.length - 1}>
+                Next
+                <ChevronRight className="w-4 h-4 ml-2" />
+              </Button>
             </div>
           </CardContent>
         </Card>
