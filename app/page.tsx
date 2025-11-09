@@ -2,11 +2,11 @@
 
 import type React from "react"
 
-import { useState } from "react"
-import { FileText, Sparkles, Upload, Brain, ChevronLeft, ChevronRight } from "lucide-react"
+import { useState, useRef, useEffect } from "react"
+import { FileText, Sparkles, Upload, Brain, ChevronLeft, ChevronRight, MessageCircle, Send } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ThemeToggle } from "@/components/theme-toggle"
 
 interface Flashcard {
   question: string
@@ -15,6 +15,7 @@ interface Flashcard {
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null)
+  const [pdfText, setPdfText] = useState<string>("")
   const [summary, setSummary] = useState<string>("")
   const [flashcards, setFlashcards] = useState<Flashcard[]>([])
   const [currentCardIndex, setCurrentCardIndex] = useState(0)
@@ -23,6 +24,24 @@ export default function Home() {
   const [loadingFlashcards, setLoadingFlashcards] = useState(false)
   const [error, setError] = useState<string>("")
   const [dragActive, setDragActive] = useState(false)
+  const [showChat, setShowChat] = useState(false)
+
+  const summaryRef = useRef<HTMLDivElement>(null)
+  const flashcardsRef = useRef<HTMLDivElement>(null)
+  const chatRef = useRef<HTMLDivElement>(null)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (summary && summaryRef.current) {
+      summaryRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [summary])
+
+  useEffect(() => {
+    if (flashcards.length > 0 && flashcardsRef.current) {
+      flashcardsRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [flashcards])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -141,11 +160,24 @@ export default function Home() {
 
   const handleReset = () => {
     setFile(null)
+    setPdfText("")
     setSummary("")
     setFlashcards([])
     setCurrentCardIndex(0)
     setShowAnswer(false)
+    setShowChat(false)
     setError("")
+  }
+
+  const handleStartChat = () => {
+    if (!file) {
+      setError("Please select a PDF file first")
+      return
+    }
+    setShowChat(true)
+    setTimeout(() => {
+      chatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+    }, 100)
   }
 
   const nextCard = () => {
@@ -164,13 +196,14 @@ export default function Home() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen gap-8 p-6">
+      <ThemeToggle />
       <div className="flex flex-col items-center gap-4 text-center">
         <div className="flex items-center gap-3">
           <Sparkles className="w-10 h-10 text-primary" />
           <h1 className="text-4xl font-bold tracking-tight text-balance md:text-5xl">AI PDF Tools</h1>
         </div>
         <p className="max-w-xl text-lg text-muted-foreground text-balance">
-          Upload any PDF document to generate summaries or study flashcards
+          Upload any PDF document to generate summaries, study flashcards, or chat with your document
         </p>
       </div>
 
@@ -224,7 +257,6 @@ export default function Home() {
                 variant="secondary"
                 disabled={!file || loadingFlashcards}
                 onClick={handleGenerateFlashcards}
-                className="flex-1"
               >
                 {loadingFlashcards ? (
                   <>
@@ -234,9 +266,13 @@ export default function Home() {
                 ) : (
                   <>
                     <Brain className="w-4 h-4 mr-2" />
-                    Generate Flashcards
+                    Flashcards
                   </>
                 )}
+              </Button>
+              <Button type="button" variant="secondary" disabled={!file} onClick={handleStartChat}>
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Chat
               </Button>
               {(file || summary || flashcards.length > 0) && (
                 <Button type="button" variant="outline" onClick={handleReset} disabled={loading || loadingFlashcards}>
@@ -249,7 +285,7 @@ export default function Home() {
       </Card>
 
       {summary && (
-        <Card className="w-full max-w-2xl">
+        <Card ref={summaryRef} className="w-full max-w-2xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="w-5 h-5" />
@@ -273,7 +309,7 @@ export default function Home() {
       )}
 
       {flashcards.length > 0 && (
-        <Card className="w-full max-w-2xl">
+        <Card ref={flashcardsRef} className="w-full max-w-2xl">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Brain className="w-5 h-5" />
@@ -315,6 +351,182 @@ export default function Home() {
           </CardContent>
         </Card>
       )}
+
+      {showChat && <ChatWithPDF file={file} chatRef={chatRef} />}
     </main>
+  )
+}
+
+interface Message {
+  id: string
+  role: "user" | "assistant"
+  content: string
+}
+
+function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefObject<HTMLDivElement> }) {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
+  const [pdfText, setPdfText] = useState<string>("")
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  useEffect(() => {
+    // Extract PDF text once when component mounts
+    if (file && !pdfText) {
+      const extractText = async () => {
+        const formData = new FormData()
+        formData.append("pdf", file)
+        formData.append("question", "extract") // dummy question to trigger extraction
+        
+        try {
+          const response = await fetch("/api/chat", {
+            method: "POST",
+            body: formData,
+          })
+          // We'll store the text for subsequent requests
+        } catch (error) {
+          console.error("Failed to extract PDF text:", error)
+        }
+      }
+      extractText()
+    }
+  }, [file, pdfText])
+
+  const onSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || !file) return
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: input,
+    }
+
+    setMessages((prev) => [...prev, userMessage])
+    setInput("")
+    setIsLoading(true)
+
+    try {
+      const formData = new FormData()
+      formData.append("pdf", file)
+      formData.append("question", input)
+      if (pdfText) {
+        formData.append("pdfText", pdfText)
+      }
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response")
+      }
+
+      const reader = response.body?.getReader()
+      const decoder = new TextDecoder()
+      let assistantMessage = ""
+
+      const assistantMessageId = (Date.now() + 1).toString()
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+        },
+      ])
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          assistantMessage += chunk
+          
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId ? { ...msg, content: assistantMessage } : msg
+            )
+          )
+        }
+      }
+    } catch (error) {
+      console.error("Chat error:", error)
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: "Sorry, I encountered an error. Please try again.",
+        },
+      ])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <Card ref={chatRef} className="w-full max-w-2xl">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <MessageCircle className="w-5 h-5" />
+          Chat with PDF
+        </CardTitle>
+        <CardDescription>Ask questions about your document</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="h-[400px] overflow-y-auto space-y-4 p-4 rounded-lg bg-muted/50">
+          {messages.length === 0 && (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+              Ask a question about your PDF document
+            </div>
+          )}
+          {messages.map((message) => (
+            <div
+              key={message.id}
+              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+            >
+              <div
+                className={`max-w-[80%] p-3 rounded-lg ${
+                  message.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-background border border-border"
+                }`}
+              >
+                <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+              </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="max-w-[80%] p-3 rounded-lg bg-background border border-border">
+                <p className="text-sm text-muted-foreground">Thinking...</p>
+              </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+
+        <form onSubmit={onSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask a question..."
+            className="flex-1 px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
+            disabled={isLoading}
+          />
+          <Button type="submit" disabled={isLoading || !input.trim()}>
+            <Send className="w-4 h-4" />
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   )
 }
