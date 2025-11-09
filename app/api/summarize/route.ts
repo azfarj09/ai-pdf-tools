@@ -94,7 +94,7 @@ ${extractedText.slice(0, 15000)}`, // Limit text to avoid token limits
     console.log("Summary:", summary)
     return NextResponse.json({ summary })
   } catch (error) {
-    console.error("[v0] PDF summarization error:", error)
+    console.error("PDF summarization error:", error)
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Failed to process PDF",
