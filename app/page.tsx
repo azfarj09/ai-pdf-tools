@@ -559,7 +559,11 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
       })
 
       if (!response.ok) {
-        throw new Error("Failed to get response")
+        const errorText = await response.text()
+        if (errorText.includes("Resource exhausted") || errorText.includes("RESOURCE_EXHAUSTED")) {
+          throw new Error("Rate limit reached. Please wait a moment before asking another question.")
+        }
+        throw new Error(errorText || "Failed to get response")
       }
 
       const reader = response.body?.getReader()
@@ -581,24 +585,50 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
           const { done, value } = await reader.read()
           if (done) break
 
-          const chunk = decoder.decode(value)
-          assistantMessage += chunk
-          
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId ? { ...msg, content: assistantMessage } : msg
+          const chunk = decoder.decode(value, { stream: true })
+          if (chunk) {
+            assistantMessage += chunk
+            
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId ? { ...msg, content: assistantMessage } : msg
+              )
             )
-          )
+          }
         }
+      }
+
+      // If no content was received after streaming is done, show an error
+      if (!assistantMessage.trim()) {
+        console.error("No content received from AI")
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: "Sorry, I couldn't generate a response. Please try rephrasing your question." }
+              : msg
+          )
+        )
       }
     } catch (error) {
       console.error("Chat error:", error)
+      let errorMessage = "Sorry, I encountered an error. Please try again."
+      
+      if (error instanceof Error) {
+        if (error.message.includes("Resource exhausted") || error.message.includes("rate limit")) {
+          errorMessage = "Rate limit reached. Please wait a moment before asking another question."
+        } else if (error.message.includes("quota")) {
+          errorMessage = "API quota exceeded. Please try again later."
+        } else {
+          errorMessage = error.message
+        }
+      }
+      
       setMessages((prev) => [
         ...prev,
         {
           id: (Date.now() + 1).toString(),
           role: "assistant",
-          content: "Sorry, I encountered an error. Please try again.",
+          content: errorMessage,
         },
       ])
     } finally {
@@ -616,22 +646,26 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
         <CardDescription>Ask questions about your document</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="h-[400px] overflow-y-auto space-y-4 p-4 rounded-lg bg-muted/50">
+        <div className="h-[400px] overflow-y-auto space-y-4 p-6 rounded-xl bg-gradient-to-b from-muted/30 to-muted/50 border border-border/50">
           {messages.length === 0 && (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-              Ask a question about your PDF document
+            <div className="flex flex-col items-center justify-center h-full gap-3">
+              <MessageCircle className="w-12 h-12 text-muted-foreground/50" />
+              <div className="text-center space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">Start a conversation</p>
+                <p className="text-xs text-muted-foreground/70">Ask any question about your PDF document</p>
+              </div>
             </div>
           )}
           {messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex ${message.role === "user" ? "justify-end" : "justify-start"} animate-in fade-in slide-in-from-bottom-2 duration-300`}
             >
               <div
-                className={`max-w-[80%] p-3 rounded-lg ${
+                className={`max-w-[85%] p-4 rounded-2xl shadow-sm ${
                   message.role === "user"
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-background border border-border"
+                    ? "bg-primary text-primary-foreground rounded-br-md"
+                    : "bg-background border border-border/50 rounded-bl-md"
                 }`}
               >
                 <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
@@ -639,25 +673,36 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
             </div>
           ))}
           {isLoading && (
-            <div className="flex justify-start">
-              <div className="max-w-[80%] p-3 rounded-lg bg-background border border-border">
-                <p className="text-sm text-muted-foreground">Thinking...</p>
+            <div className="flex justify-start animate-in fade-in slide-in-from-bottom-2 duration-300">
+              <div className="max-w-[85%] p-4 rounded-2xl rounded-bl-md bg-background border border-border/50 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }}></div>
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }}></div>
+                  <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }}></div>
+                </div>
               </div>
             </div>
           )}
           <div ref={messagesEndRef} />
         </div>
 
-        <form onSubmit={onSubmit} className="flex gap-2">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
-            className="flex-1 px-4 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
-            disabled={isLoading}
-          />
-          <Button type="submit" disabled={isLoading || !input.trim()}>
+        <form onSubmit={onSubmit} className="flex gap-3">
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Type your question here..."
+              className="w-full px-5 py-3 pr-12 rounded-xl border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all placeholder:text-muted-foreground/50"
+              disabled={isLoading}
+            />
+          </div>
+          <Button 
+            type="submit" 
+            disabled={isLoading || !input.trim()}
+            size="lg"
+            className="rounded-xl px-6"
+          >
             <Send className="w-4 h-4" />
           </Button>
         </form>

@@ -113,7 +113,12 @@ Here is the content of the PDF document:
 
 ${extractedText.slice(0, 30000)}
 
-Answer questions based on this document content. Be concise, accurate, and cite specific information from the document when relevant. If the answer is not in the document, say so.`,
+Your task:
+- Answer questions based on the document content above
+- Be concise, accurate, and helpful
+- Cite specific information from the document when relevant
+- If the question is about something not in the document, politely say so and offer to answer questions about what IS in the document
+- Always provide a response - never return empty content`,
         },
         {
           role: "user",
