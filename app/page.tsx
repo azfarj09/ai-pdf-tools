@@ -142,16 +142,27 @@ export default function Home() {
 
       if (!response.ok) {
         let errorMessage = "Failed to summarize PDF"
+        
+        // Clone the response so we can try multiple parsing methods
+        const responseClone = response.clone()
+        
         try {
           const errorData = await response.json()
           errorMessage = errorData.error || errorMessage
         } catch {
-          // If JSON parsing fails, try to get text
-          const errorText = await response.text()
-          if (errorText.includes("too large") || response.status === 413) {
-            errorMessage = "PDF file is too large. Please try a smaller file."
-          } else {
-            errorMessage = errorText || errorMessage
+          // If JSON parsing fails, try to get text from the clone
+          try {
+            const errorText = await responseClone.text()
+            if (errorText.includes("too large") || response.status === 413) {
+              errorMessage = "PDF file is too large. Please try a smaller file."
+            } else if (errorText) {
+              errorMessage = errorText
+            }
+          } catch {
+            // If both fail, use status-based message
+            if (response.status === 413) {
+              errorMessage = "PDF file is too large. Please try a smaller file."
+            }
           }
         }
         throw new Error(errorMessage)
@@ -218,15 +229,27 @@ export default function Home() {
 
       if (!response.ok) {
         let errorMessage = "Failed to generate flashcards"
+        
+        // Clone the response so we can try multiple parsing methods
+        const responseClone = response.clone()
+        
         try {
           const errorData = await response.json()
           errorMessage = errorData.error || errorMessage
         } catch {
-          const errorText = await response.text()
-          if (errorText.includes("too large") || response.status === 413) {
-            errorMessage = "PDF file is too large. Please try a smaller file."
-          } else {
-            errorMessage = errorText || errorMessage
+          // If JSON parsing fails, try to get text from the clone
+          try {
+            const errorText = await responseClone.text()
+            if (errorText.includes("too large") || response.status === 413) {
+              errorMessage = "PDF file is too large. Please try a smaller file."
+            } else if (errorText) {
+              errorMessage = errorText
+            }
+          } catch {
+            // If both fail, use status-based message
+            if (response.status === 413) {
+              errorMessage = "PDF file is too large. Please try a smaller file."
+            }
           }
         }
         throw new Error(errorMessage)
