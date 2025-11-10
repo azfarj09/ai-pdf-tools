@@ -130,8 +130,10 @@ export default function Home() {
 
       const formData = new FormData()
       if (blobUrl) {
+        console.log("Using blob URL:", blobUrl)
         formData.append("blobUrl", blobUrl)
       } else {
+        console.log("Using direct file upload")
         formData.append("pdf", file)
       }
 
@@ -139,6 +141,8 @@ export default function Home() {
         method: "POST",
         body: formData,
       })
+      
+      console.log("Response status:", response.status)
 
       if (!response.ok) {
         let errorMessage = "Failed to summarize PDF"

@@ -58,16 +58,23 @@ export async function POST(req: NextRequest) {
     const file = formData.get("pdf") as File
     const blobUrl = formData.get("blobUrl") as string
 
+    console.log("Received request - blobUrl:", !!blobUrl, "file:", !!file)
+
     let pdfBuffer: Buffer
 
     if (blobUrl) {
       // Fetch from blob storage
-      console.log("Fetching PDF from blob storage...")
+      console.log("Fetching PDF from blob storage:", blobUrl)
       const response = await fetch(blobUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch from blob storage: ${response.statusText}`)
+      }
       const arrayBuffer = await response.arrayBuffer()
       pdfBuffer = Buffer.from(arrayBuffer)
+      console.log("Fetched PDF buffer size:", pdfBuffer.length)
     } else if (file) {
       // Use uploaded file directly
+      console.log("Using direct file upload, size:", file.size)
       if (file.type !== "application/pdf") {
         return NextResponse.json({ error: "File must be a PDF" }, { status: 400 })
       }
