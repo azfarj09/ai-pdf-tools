@@ -6,9 +6,7 @@ import PDFParser from "pdf2json"
 export const maxDuration = 60
 
 // PDF text extraction function using pdf2json
-async function extractTextFromPDF(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+async function extractTextFromPDFBuffer(buffer: Buffer): Promise<string> {
 
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser()
@@ -57,6 +55,7 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const file = formData.get("pdf") as File
+    const blobUrl = formData.get("blobUrl") as string
     const question = formData.get("question") as string
     const pdfText = formData.get("pdfText") as string
 
@@ -66,12 +65,27 @@ export async function POST(req: NextRequest) {
 
     let extractedText = pdfText
 
-    // If pdfText is not provided, extract it from the file
-    if (!extractedText && file) {
-      if (file.type !== "application/pdf") {
-        return new Response("File must be a PDF", { status: 400 })
+    // If pdfText is not provided, extract it from the file or blob
+    if (!extractedText) {
+      let pdfBuffer: Buffer
+
+      if (blobUrl) {
+        // Fetch from blob storage
+        const response = await fetch(blobUrl)
+        const arrayBuffer = await response.arrayBuffer()
+        pdfBuffer = Buffer.from(arrayBuffer)
+      } else if (file) {
+        // Use uploaded file directly
+        if (file.type !== "application/pdf") {
+          return new Response("File must be a PDF", { status: 400 })
+        }
+        const arrayBuffer = await file.arrayBuffer()
+        pdfBuffer = Buffer.from(arrayBuffer)
+      } else {
+        return new Response("No PDF content available", { status: 400 })
       }
-      extractedText = await extractTextFromPDF(file)
+
+      extractedText = await extractTextFromPDFBuffer(pdfBuffer)
     }
 
     if (!extractedText) {

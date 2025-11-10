@@ -6,9 +6,7 @@ import PDFParser from "pdf2json"
 export const maxDuration = 60
 
 // PDF text extraction function using pdf2json
-async function extractTextFromPDF(file: File): Promise<string> {
-  const arrayBuffer = await file.arrayBuffer()
-  const buffer = Buffer.from(arrayBuffer)
+async function extractTextFromPDFBuffer(buffer: Buffer): Promise<string> {
 
   return new Promise((resolve, reject) => {
     const pdfParser = new PDFParser()
@@ -57,17 +55,28 @@ export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData()
     const file = formData.get("pdf") as File
+    const blobUrl = formData.get("blobUrl") as string
 
-    if (!file) {
+    let pdfBuffer: Buffer
+
+    if (blobUrl) {
+      // Fetch from blob storage
+      const response = await fetch(blobUrl)
+      const arrayBuffer = await response.arrayBuffer()
+      pdfBuffer = Buffer.from(arrayBuffer)
+    } else if (file) {
+      // Use uploaded file directly
+      if (file.type !== "application/pdf") {
+        return NextResponse.json({ error: "File must be a PDF" }, { status: 400 })
+      }
+      const arrayBuffer = await file.arrayBuffer()
+      pdfBuffer = Buffer.from(arrayBuffer)
+    } else {
       return NextResponse.json({ error: "No PDF file provided" }, { status: 400 })
     }
 
-    if (file.type !== "application/pdf") {
-      return NextResponse.json({ error: "File must be a PDF" }, { status: 400 })
-    }
-
     // Extract text from PDF
-    const extractedText = await extractTextFromPDF(file)
+    const extractedText = await extractTextFromPDFBuffer(pdfBuffer)
 
     // Generate flashcards using AI SDK with Google Gemini
     const result = await generateText({

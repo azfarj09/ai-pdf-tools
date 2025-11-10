@@ -64,10 +64,10 @@ export default function Home() {
         setError("Please upload a PDF file")
         return
       }
-      // Check file size (limit to 10MB for serverless functions)
-      const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+      // Check file size (limit to 50MB with blob storage)
+      const maxSize = 50 * 1024 * 1024 // 50MB in bytes
       if (droppedFile.size > maxSize) {
-        setError("PDF file is too large. Please upload a file smaller than 10MB.")
+        setError("PDF file is too large. Please upload a file smaller than 50MB.")
         return
       }
       setFile(droppedFile)
@@ -82,10 +82,10 @@ export default function Home() {
         setError("Please upload a PDF file")
         return
       }
-      // Check file size (limit to 10MB for serverless functions)
-      const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+      // Check file size (limit to 50MB with blob storage)
+      const maxSize = 50 * 1024 * 1024 // 50MB in bytes
       if (selectedFile.size > maxSize) {
-        setError("PDF file is too large. Please upload a file smaller than 10MB.")
+        setError("PDF file is too large. Please upload a file smaller than 50MB.")
         return
       }
       setFile(selectedFile)
@@ -105,8 +105,35 @@ export default function Home() {
     setSummary("")
 
     try {
+      let blobUrl = ""
+
+      // For files larger than 4.5MB, try to upload to Vercel Blob first
+      if (file.size > 4.5 * 1024 * 1024) {
+        console.log("Large file detected, attempting blob storage upload...")
+        try {
+          const uploadResponse = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+            method: "POST",
+            body: file,
+          })
+
+          if (uploadResponse.ok) {
+            const uploadData = await uploadResponse.json()
+            blobUrl = uploadData.url
+            console.log("File uploaded to blob storage")
+          } else {
+            console.warn("Blob storage not configured, trying direct upload...")
+          }
+        } catch (uploadError) {
+          console.warn("Blob upload failed, trying direct upload:", uploadError)
+        }
+      }
+
       const formData = new FormData()
-      formData.append("pdf", file)
+      if (blobUrl) {
+        formData.append("blobUrl", blobUrl)
+      } else {
+        formData.append("pdf", file)
+      }
 
       const response = await fetch("/api/summarize", {
         method: "POST",
@@ -156,8 +183,33 @@ export default function Home() {
     setShowAnswer(false)
 
     try {
+      let blobUrl = ""
+
+      // For files larger than 4.5MB, try to upload to Vercel Blob first
+      if (file.size > 4.5 * 1024 * 1024) {
+        try {
+          const uploadResponse = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
+            method: "POST",
+            body: file,
+          })
+
+          if (uploadResponse.ok) {
+            const uploadData = await uploadResponse.json()
+            blobUrl = uploadData.url
+          } else {
+            console.warn("Blob storage not configured, trying direct upload...")
+          }
+        } catch (uploadError) {
+          console.warn("Blob upload failed, trying direct upload:", uploadError)
+        }
+      }
+
       const formData = new FormData()
-      formData.append("pdf", file)
+      if (blobUrl) {
+        formData.append("blobUrl", blobUrl)
+      } else {
+        formData.append("pdf", file)
+      }
 
       const response = await fetch("/api/flashcards", {
         method: "POST",
