@@ -116,6 +116,7 @@ export default function Home() {
           const blob = await upload(file.name, file, {
             access: "public",
             handleUploadUrl: "/api/upload",
+            clientPayload: JSON.stringify({ filename: file.name }),
           })
           blobUrl = blob.url
           console.log("File uploaded to blob storage:", blobUrl)
