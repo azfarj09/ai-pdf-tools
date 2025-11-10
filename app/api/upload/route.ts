@@ -5,11 +5,21 @@ export async function POST(request: Request): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody
 
   try {
+    // Get the token from environment (check both possible names)
+    const token = process.env.BLOB_READ_WRITE_TOKEN || process.env.pdfuploads_READ_WRITE_TOKEN
+    
+    if (!token) {
+      console.error("No blob token found in environment")
+      return NextResponse.json(
+        { error: "Blob storage not configured" },
+        { status: 503 }
+      )
+    }
+
     const jsonResponse = await handleUpload({
       body,
       request,
       onBeforeGenerateToken: async (pathname) => {
-        // You can add validation here if needed
         return {
           allowedContentTypes: ["application/pdf"],
           tokenPayload: JSON.stringify({}),
