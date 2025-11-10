@@ -26,7 +26,12 @@ async function extractTextFromPDF(file: File): Promise<string> {
             if (page.Texts) {
               for (const textItem of page.Texts) {
                 for (const run of textItem.R) {
-                  text += decodeURIComponent(run.T) + " "
+                  try {
+                    text += decodeURIComponent(run.T) + " "
+                  } catch (e) {
+                    // If decoding fails, use the raw text
+                    text += run.T + " "
+                  }
                 }
               }
             }

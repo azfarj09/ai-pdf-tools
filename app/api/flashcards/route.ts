@@ -25,7 +25,12 @@ async function extractTextFromPDF(file: File): Promise<string> {
             if (page.Texts) {
               for (const textItem of page.Texts) {
                 for (const run of textItem.R) {
-                  text += decodeURIComponent(run.T) + " "
+                  try {
+                    text += decodeURIComponent(run.T) + " "
+                  } catch (e) {
+                    // If decoding fails, use the raw text
+                    text += run.T + " "
+                  }
                 }
               }
             }
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     // Generate flashcards using AI SDK with Google Gemini
     const result = await generateText({
-      model: google("gemini-2.0-flash-exp"),
+      model: google("gemini-2.0-flash"),
       prompt: `You are a professional educator creating study flashcards. Based on the following document text, create 10-15 high-quality flashcards.
 
 Format your response as a JSON array with this exact structure:
