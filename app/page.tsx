@@ -434,17 +434,31 @@ export default function Home() {
           </CardHeader>
           <CardContent className="space-y-4">
             <div
-              className="min-h-[200px] p-6 rounded-lg bg-muted/50 flex items-center justify-center cursor-pointer transition-all hover:bg-muted"
+              className="relative min-h-[200px] cursor-pointer perspective-1000"
               onClick={() => setShowAnswer(!showAnswer)}
             >
-              <div className="text-center space-y-4">
-                <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
-                  {showAnswer ? "Answer" : "Question"}
-                </p>
-                <p className="text-lg leading-relaxed">
-                  {showAnswer ? flashcards[currentCardIndex].answer : flashcards[currentCardIndex].question}
-                </p>
-                <p className="text-xs text-muted-foreground">Click to {showAnswer ? "hide" : "reveal"} answer</p>
+              <div
+                className={`relative w-full min-h-[200px] transition-transform duration-500 preserve-3d ${
+                  showAnswer ? "rotate-y-180" : ""
+                }`}
+              >
+                {/* Front of card (Question) */}
+                <div className="absolute inset-0 p-6 rounded-lg bg-muted/50 flex items-center justify-center backface-hidden hover:bg-muted transition-colors">
+                  <div className="text-center space-y-4">
+                    <p className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Question</p>
+                    <p className="text-lg leading-relaxed">{flashcards[currentCardIndex].question}</p>
+                    <p className="text-xs text-muted-foreground">Click to reveal answer</p>
+                  </div>
+                </div>
+
+                {/* Back of card (Answer) */}
+                <div className="absolute inset-0 p-6 rounded-lg bg-primary/10 flex items-center justify-center backface-hidden rotate-y-180 hover:bg-primary/20 transition-colors">
+                  <div className="text-center space-y-4">
+                    <p className="text-sm font-semibold text-primary uppercase tracking-wide">Answer</p>
+                    <p className="text-lg leading-relaxed">{flashcards[currentCardIndex].answer}</p>
+                    <p className="text-xs text-muted-foreground">Click to hide answer</p>
+                  </div>
+                </div>
               </div>
             </div>
 
