@@ -107,27 +107,21 @@ export default function Home() {
     try {
       let blobUrl = ""
 
-      // For files larger than 4.5MB, try to upload to Vercel Blob first
+      // For files larger than 4.5MB, upload directly to Vercel Blob using client upload
       if (file.size > 4.5 * 1024 * 1024) {
-        console.log("Large file detected, attempting blob storage upload...")
+        console.log("Large file detected, uploading to blob storage...")
         try {
-          const uploadResponse = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
-            method: "POST",
-            body: file,
+          // Use Vercel Blob client upload
+          const { upload } = await import("@vercel/blob/client")
+          const blob = await upload(file.name, file, {
+            access: "public",
+            handleUploadUrl: "/api/upload",
           })
-
-          if (uploadResponse.ok) {
-            const uploadData = await uploadResponse.json()
-            blobUrl = uploadData.url
-            console.log("File uploaded to blob storage:", blobUrl)
-          } else {
-            const errorData = await uploadResponse.json().catch(() => ({ error: "Unknown error" }))
-            console.error("Blob upload failed:", uploadResponse.status, errorData)
-            console.warn("Blob storage not configured, trying direct upload...")
-          }
+          blobUrl = blob.url
+          console.log("File uploaded to blob storage:", blobUrl)
         } catch (uploadError) {
-          console.error("Blob upload exception:", uploadError)
-          console.warn("Blob upload failed, trying direct upload:", uploadError)
+          console.error("Blob upload failed:", uploadError)
+          console.warn("Trying direct upload (may fail for large files)...")
         }
       }
 
