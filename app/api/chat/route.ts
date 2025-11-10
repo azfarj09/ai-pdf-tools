@@ -12,7 +12,12 @@ async function extractTextFromPDFBuffer(buffer: Buffer): Promise<string> {
     const pdfParser = new PDFParser()
 
     pdfParser.on("pdfParser_dataError", (errData: any) => {
-      reject(new Error(errData.parserError))
+      const errorMsg = errData.parserError || ""
+      if (errorMsg.includes("encryption") || errorMsg.includes("Encrypt")) {
+        reject(new Error("This PDF is encrypted or password-protected. Please use an unencrypted PDF."))
+      } else {
+        reject(new Error(errData.parserError || "Failed to parse PDF"))
+      }
     })
 
     pdfParser.on("pdfParser_dataReady", (pdfData: any) => {
@@ -47,7 +52,11 @@ async function extractTextFromPDFBuffer(buffer: Buffer): Promise<string> {
       }
     })
 
-    pdfParser.parseBuffer(buffer)
+    try {
+      pdfParser.parseBuffer(buffer)
+    } catch (parseError) {
+      reject(new Error("Failed to parse PDF. The file might be encrypted, password-protected, or corrupted."))
+    }
   })
 }
 
