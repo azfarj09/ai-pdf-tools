@@ -198,29 +198,30 @@ export default function Home() {
     try {
       let blobUrl = ""
 
-      // For files larger than 4.5MB, try to upload to Vercel Blob first
+      // For files larger than 4.5MB, upload directly to Vercel Blob using client upload
       if (file.size > 4.5 * 1024 * 1024) {
+        console.log("Large file detected, uploading to blob storage...")
         try {
-          const uploadResponse = await fetch(`/api/upload?filename=${encodeURIComponent(file.name)}`, {
-            method: "POST",
-            body: file,
+          const { upload } = await import("@vercel/blob/client")
+          const blob = await upload(file.name, file, {
+            access: "public",
+            handleUploadUrl: "/api/upload",
+            clientPayload: JSON.stringify({ filename: file.name }),
           })
-
-          if (uploadResponse.ok) {
-            const uploadData = await uploadResponse.json()
-            blobUrl = uploadData.url
-          } else {
-            console.warn("Blob storage not configured, trying direct upload...")
-          }
+          blobUrl = blob.url
+          console.log("File uploaded to blob storage:", blobUrl)
         } catch (uploadError) {
-          console.warn("Blob upload failed, trying direct upload:", uploadError)
+          console.error("Blob upload failed:", uploadError)
+          console.warn("Trying direct upload (may fail for large files)...")
         }
       }
 
       const formData = new FormData()
       if (blobUrl) {
+        console.log("Using blob URL for flashcards:", blobUrl)
         formData.append("blobUrl", blobUrl)
       } else {
+        console.log("Using direct file upload for flashcards")
         formData.append("pdf", file)
       }
 
@@ -480,6 +481,7 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [pdfText, setPdfText] = useState<string>("")
+  const [blobUrl, setBlobUrl] = useState<string>("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -487,26 +489,26 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
   }, [messages])
 
   useEffect(() => {
-    // Extract PDF text once when component mounts
-    if (file && !pdfText) {
-      const extractText = async () => {
-        const formData = new FormData()
-        formData.append("pdf", file)
-        formData.append("question", "extract") // dummy question to trigger extraction
-        
+    // Upload large files to blob storage once when component mounts
+    if (file && !blobUrl && file.size > 4.5 * 1024 * 1024) {
+      const uploadToBlob = async () => {
         try {
-          const response = await fetch("/api/chat", {
-            method: "POST",
-            body: formData,
+          console.log("Uploading PDF to blob for chat...")
+          const { upload } = await import("@vercel/blob/client")
+          const blob = await upload(file.name, file, {
+            access: "public",
+            handleUploadUrl: "/api/upload",
+            clientPayload: JSON.stringify({ filename: file.name }),
           })
-          // We'll store the text for subsequent requests
+          setBlobUrl(blob.url)
+          console.log("PDF uploaded to blob for chat:", blob.url)
         } catch (error) {
-          console.error("Failed to extract PDF text:", error)
+          console.error("Failed to upload PDF to blob:", error)
         }
       }
-      extractText()
+      uploadToBlob()
     }
-  }, [file, pdfText])
+  }, [file, blobUrl])
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -524,7 +526,14 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
 
     try {
       const formData = new FormData()
-      formData.append("pdf", file)
+      
+      // Use blob URL for large files, direct upload for small files
+      if (blobUrl) {
+        formData.append("blobUrl", blobUrl)
+      } else {
+        formData.append("pdf", file)
+      }
+      
       formData.append("question", input)
       if (pdfText) {
         formData.append("pdfText", pdfText)
