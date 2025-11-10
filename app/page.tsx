@@ -60,24 +60,36 @@ export default function Home() {
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0]
-      if (droppedFile.type === "application/pdf") {
-        setFile(droppedFile)
-        setError("")
-      } else {
+      if (droppedFile.type !== "application/pdf") {
         setError("Please upload a PDF file")
+        return
       }
+      // Check file size (limit to 10MB for serverless functions)
+      const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+      if (droppedFile.size > maxSize) {
+        setError("PDF file is too large. Please upload a file smaller than 10MB.")
+        return
+      }
+      setFile(droppedFile)
+      setError("")
     }
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
-      if (selectedFile.type === "application/pdf") {
-        setFile(selectedFile)
-        setError("")
-      } else {
+      if (selectedFile.type !== "application/pdf") {
         setError("Please upload a PDF file")
+        return
       }
+      // Check file size (limit to 10MB for serverless functions)
+      const maxSize = 10 * 1024 * 1024 // 10MB in bytes
+      if (selectedFile.size > maxSize) {
+        setError("PDF file is too large. Please upload a file smaller than 10MB.")
+        return
+      }
+      setFile(selectedFile)
+      setError("")
     }
   }
 
@@ -102,8 +114,20 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to summarize PDF")
+        let errorMessage = "Failed to summarize PDF"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          // If JSON parsing fails, try to get text
+          const errorText = await response.text()
+          if (errorText.includes("too large") || response.status === 413) {
+            errorMessage = "PDF file is too large. Please try a smaller file."
+          } else {
+            errorMessage = errorText || errorMessage
+          }
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -141,8 +165,19 @@ export default function Home() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to generate flashcards")
+        let errorMessage = "Failed to generate flashcards"
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
+        } catch {
+          const errorText = await response.text()
+          if (errorText.includes("too large") || response.status === 413) {
+            errorMessage = "PDF file is too large. Please try a smaller file."
+          } else {
+            errorMessage = errorText || errorMessage
+          }
+        }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
