@@ -490,7 +490,7 @@ interface Message {
   content: string
 }
 
-function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefObject<HTMLDivElement> }) {
+function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefObject<HTMLDivElement | null> }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -700,8 +700,7 @@ function ChatWithPDF({ file, chatRef }: { file: File | null; chatRef: React.RefO
           <Button 
             type="submit" 
             disabled={isLoading || !input.trim()}
-            size="lg"
-            className="rounded-xl px-6"
+            className="rounded-xl px-6 h-[49.5px]"
           >
             <Send className="w-4 h-4" />
           </Button>
