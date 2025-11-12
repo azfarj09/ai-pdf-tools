@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { FileText, Sparkles, Upload, Brain, ChevronLeft, ChevronRight, MessageCircle, Send } from "lucide-react"
+import { FileText, Sparkles, Upload, Brain, ChevronLeft, ChevronRight, MessageCircle, Send, Eye, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -25,11 +25,14 @@ export default function Home() {
   const [error, setError] = useState<string>("")
   const [dragActive, setDragActive] = useState(false)
   const [showChat, setShowChat] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string>("")
 
   const summaryRef = useRef<HTMLDivElement>(null)
   const flashcardsRef = useRef<HTMLDivElement>(null)
   const chatRef = useRef<HTMLDivElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (summary && summaryRef.current) {
@@ -42,6 +45,30 @@ export default function Home() {
       flashcardsRef.current.scrollIntoView({ behavior: "smooth", block: "start" })
     }
   }, [flashcards])
+
+  useEffect(() => {
+    // Create preview URL when file is selected
+    if (file) {
+      const url = URL.createObjectURL(file)
+      setPdfPreviewUrl(url)
+
+      // Cleanup function to revoke the URL when component unmounts or file changes
+      return () => {
+        URL.revokeObjectURL(url)
+      }
+    } else {
+      setPdfPreviewUrl("")
+    }
+  }, [file])
+
+  useEffect(() => {
+    // Scroll to preview when it's shown
+    if (showPreview && previewRef.current) {
+      setTimeout(() => {
+        previewRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      }, 100)
+    }
+  }, [showPreview])
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -279,7 +306,17 @@ export default function Home() {
     setCurrentCardIndex(0)
     setShowAnswer(false)
     setShowChat(false)
+    setShowPreview(false)
+    setPdfPreviewUrl("")
     setError("")
+  }
+
+  const handlePreviewPDF = () => {
+    if (!file) {
+      setError("Please select a PDF file first")
+      return
+    }
+    setShowPreview(true)
   }
 
   const handleStartChat = () => {
@@ -387,6 +424,10 @@ export default function Home() {
                 <MessageCircle className="w-4 h-4 mr-2" />
                 Chat
               </Button>
+              <Button type="button" variant="secondary" disabled={!file} onClick={handlePreviewPDF}>
+                <Eye className="w-4 h-4 mr-2" />
+                Preview
+              </Button>
               {(file || summary || flashcards.length > 0) && (
                 <Button type="button" variant="outline" onClick={handleReset} disabled={loading || loadingFlashcards}>
                   Reset
@@ -396,6 +437,35 @@ export default function Home() {
           </form>
         </CardContent>
       </Card>
+
+      {showPreview && pdfPreviewUrl && (
+        <Card ref={previewRef} className="w-full max-w-2xl">
+          <CardHeader className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-4 top-0 h-8 w-8"
+              onClick={() => setShowPreview(false)}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <CardTitle className="flex items-center gap-2">
+              <Eye className="w-5 h-5" />
+              PDF Preview
+            </CardTitle>
+            <CardDescription>Full document preview</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="w-full h-[550px] border rounded-lg overflow-hidden bg-muted/30">
+              <iframe
+                src={`${pdfPreviewUrl}#view=FitH&zoom=74`}
+                className="w-full h-full"
+                title="PDF Preview"
+              />
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {summary && (
         <Card ref={summaryRef} className="w-full max-w-2xl">
