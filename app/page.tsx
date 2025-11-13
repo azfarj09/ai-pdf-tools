@@ -7,6 +7,7 @@ import { FileText, Sparkles, Upload, Brain, ChevronLeft, ChevronRight, MessageCi
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ThemeToggle } from "@/components/theme-toggle"
+import { PDFViewer } from "@/components/pdf-viewer"
 
 interface Flashcard {
   question: string
@@ -456,13 +457,7 @@ export default function Home() {
             <CardDescription>Full document preview</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="w-full h-[550px] border rounded-lg overflow-hidden bg-muted/30">
-              <iframe
-                src={`${pdfPreviewUrl}#view=FitH&zoom=74`}
-                className="w-full h-full"
-                title="PDF Preview"
-              />
-            </div>
+            <PDFViewer fileUrl={pdfPreviewUrl} />
           </CardContent>
         </Card>
       )}
