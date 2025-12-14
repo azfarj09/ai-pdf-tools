@@ -62,12 +62,15 @@ async function extractTextFromPDFBuffer(buffer: Buffer): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  const requestId = Math.random().toString(36).substring(7)
+  console.log(`[${requestId}] === NEW SUMMARIZE REQUEST ===`)
+  
   try {
     const formData = await req.formData()
     const file = formData.get("pdf") as File
     const blobUrl = formData.get("blobUrl") as string
 
-    console.log("Received request - blobUrl:", !!blobUrl, "file:", !!file)
+    console.log(`[${requestId}] Received request - blobUrl:`, !!blobUrl, "file:", !!file)
 
     let pdfBuffer: Buffer
 
@@ -94,16 +97,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Extract text from PDF
-    console.log("Extracting text from PDF...")
+    console.log(`[${requestId}] Extracting text from PDF...`)
     const extractedText = await extractTextFromPDFBuffer(pdfBuffer)
-    console.log("Extracted text length:", extractedText.length)
-    console.log("First 200 chars:", extractedText.slice(0, 200))
+    console.log(`[${requestId}] Extracted text length:`, extractedText.length)
+    console.log(`[${requestId}] First 200 chars:`, extractedText.slice(0, 200))
 
     // Generate summary using AI SDK with Google Gemini
-    console.log("Generating summary with Gemini...")
-    const result = await generateText({
-      model: google("gemini-2.0-flash"),
-      prompt: `You are a professional document summarizer. Please provide a clear, structured summary of the following document text. 
+    console.log(`[${requestId}] Generating summary with Gemini...`)
+    
+    try {
+      const result = await generateText({
+        model: google("gemini-2.5-flash"),
+        prompt: `You are a professional document summarizer. Please provide a clear, structured summary of the following document text. 
 
 Focus on:
 - Main topics and key points
@@ -113,19 +118,47 @@ Focus on:
 Keep the summary concise but comprehensive, using clear paragraphs.
 
 Document text:
-${extractedText.slice(0, 15000)}`, // Limit text to avoid token limits
-      maxOutputTokens: 1000,
-      temperature: 0.3,
-    })
+${extractedText.slice(0, 30000)}`, // Increased from 15000 to 30000
+        maxOutputTokens: 4096,
+        temperature: 0.3,
+      })
 
-    console.log("Result object:", JSON.stringify(result, null, 2))
-    const summary = result.text
-    console.log("Summary generated successfully!")
-    console.log("Summary length:", summary?.length)
-    console.log("Summary:", summary)
-    return NextResponse.json({ summary })
-  } catch (error) {
-    console.error("PDF summarization error:", error)
+      console.log(`[${requestId}] Result object:`, JSON.stringify(result, null, 2))
+      const summary = result.text
+      
+      if (!summary || summary.trim().length === 0) {
+        console.error(`[${requestId}] No content received from AI`)
+        throw new Error("No content received from AI")
+      }
+      
+      console.log(`[${requestId}] Summary generated successfully!`)
+      console.log(`[${requestId}] Summary length:`, summary?.length)
+      return NextResponse.json({ summary })
+    } catch (aiError: any) {
+      console.error(`[${requestId}] AI generation error:`, aiError)
+      console.error(`[${requestId}] Error details:`, {
+        message: aiError?.message,
+        status: aiError?.status,
+        statusText: aiError?.statusText,
+        cause: aiError?.cause
+      })
+      
+      // Check for rate limit errors
+      if (aiError?.message?.includes("429") || 
+          aiError?.message?.includes("quota") || 
+          aiError?.message?.includes("rate limit") ||
+          aiError?.message?.includes("RESOURCE_EXHAUSTED")) {
+        return NextResponse.json(
+          { error: "Rate limit reached. Please wait a moment and try again." },
+          { status: 429 }
+        )
+      }
+      
+      throw aiError
+    }
+  } catch (error: any) {
+    console.error(`[${requestId}] PDF summarization error:`, error)
+    console.error(`[${requestId}] Full error:`, JSON.stringify(error, null, 2))
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Failed to process PDF",

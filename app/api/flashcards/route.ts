@@ -88,9 +88,10 @@ export async function POST(req: NextRequest) {
     const extractedText = await extractTextFromPDFBuffer(pdfBuffer)
 
     // Generate flashcards using AI SDK with Google Gemini
-    const result = await generateText({
-      model: google("gemini-2.0-flash"),
-      prompt: `You are a professional educator creating study flashcards. Based on the following document text, create 10-15 high-quality flashcards.
+    try {
+      const result = await generateText({
+        model: google("gemini-2.5-flash"),
+        prompt: `You are a professional educator creating study flashcards. Based on the following document text, create 10-15 high-quality flashcards.
 
 Format your response as a JSON array with this exact structure:
 [
@@ -108,26 +109,46 @@ Guidelines:
 - Use varied question types (what, why, how, define, etc.)
 
 Document text:
-${extractedText.slice(0, 15000)}`,
-      maxOutputTokens: 2000,
-      temperature: 0.7,
-    })
+${extractedText.slice(0, 30000)}`,
+        maxOutputTokens: 4096,
+        temperature: 0.7,
+      })
 
-    const flashcardsText = result.text
-    
-    // Parse the JSON response
-    let flashcards
-    try {
-      // Try to extract JSON from markdown code blocks if present
-      const jsonMatch = flashcardsText.match(/```json\n?([\s\S]*?)\n?```/) || flashcardsText.match(/\[[\s\S]*\]/)
-      const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : flashcardsText
-      flashcards = JSON.parse(jsonText)
-    } catch (parseError) {
-      console.error("Failed to parse flashcards JSON:", parseError)
-      return NextResponse.json({ error: "Failed to generate valid flashcards" }, { status: 500 })
+      const flashcardsText = result.text
+      
+      if (!flashcardsText || flashcardsText.trim().length === 0) {
+        throw new Error("No content received from AI")
+      }
+      
+      // Parse the JSON response
+      let flashcards
+      try {
+        // Try to extract JSON from markdown code blocks if present
+        const jsonMatch = flashcardsText.match(/```json\n?([\s\S]*?)\n?```/) || flashcardsText.match(/\[[\s\S]*\]/)
+        const jsonText = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : flashcardsText
+        flashcards = JSON.parse(jsonText)
+      } catch (parseError) {
+        console.error("Failed to parse flashcards JSON:", parseError)
+        return NextResponse.json({ error: "Failed to generate valid flashcards" }, { status: 500 })
+      }
+
+      return NextResponse.json({ flashcards })
+    } catch (aiError: any) {
+      console.error("AI generation error:", aiError)
+      
+      // Check for rate limit errors
+      if (aiError?.message?.includes("429") || 
+          aiError?.message?.includes("quota") || 
+          aiError?.message?.includes("rate limit") ||
+          aiError?.message?.includes("RESOURCE_EXHAUSTED")) {
+        return NextResponse.json(
+          { error: "Rate limit reached. Please wait a moment and try again." },
+          { status: 429 }
+        )
+      }
+      
+      throw aiError
     }
-
-    return NextResponse.json({ flashcards })
   } catch (error) {
     console.error("PDF flashcard generation error:", error)
     return NextResponse.json(

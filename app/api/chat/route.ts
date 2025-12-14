@@ -102,12 +102,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Stream the response using AI SDK
-    const result = streamText({
-      model: google("gemini-2.0-flash"),
-      messages: [
-        {
-          role: "system",
-          content: `You are a helpful AI assistant that answers questions about PDF documents. 
+    try {
+      const result = streamText({
+        model: google("gemini-2.5-flash"),
+        messages: [
+          {
+            role: "system",
+            content: `You are a helpful AI assistant that answers questions about PDF documents. 
           
 Here is the content of the PDF document:
 
@@ -119,16 +120,29 @@ Your task:
 - Cite specific information from the document when relevant
 - If the question is about something not in the document, politely say so and offer to answer questions about what IS in the document
 - Always provide a response - never return empty content`,
-        },
-        {
-          role: "user",
-          content: question,
-        },
-      ],
-      temperature: 0.3,
-    })
+          },
+          {
+            role: "user",
+            content: question,
+          },
+        ],
+        temperature: 0.3,
+      })
 
-    return result.toTextStreamResponse()
+      return result.toTextStreamResponse()
+    } catch (aiError: any) {
+      console.error("AI streaming error:", aiError)
+      
+      // Check for rate limit errors
+      if (aiError?.message?.includes("429") || 
+          aiError?.message?.includes("quota") || 
+          aiError?.message?.includes("rate limit") ||
+          aiError?.message?.includes("RESOURCE_EXHAUSTED")) {
+        return new Response("Rate limit reached. Please wait a moment before asking another question.", { status: 429 })
+      }
+      
+      throw aiError
+    }
   } catch (error) {
     console.error("PDF chat error:", error)
     return new Response(error instanceof Error ? error.message : "Failed to process chat", { status: 500 })
